@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Environment — never commit real values
+.env
+.env.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
