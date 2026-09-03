@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_name: str = "frp_session"
     cors_origins: str = "http://localhost:5173"
+    # Set false to bring the stack up against an existing database without seeding it.
+    seed_on_startup: bool = True
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -84,8 +84,16 @@ mechanism is removed.
 5. **Merged requests are read-only, hidden from the board, and excluded from stats.** Anything
    querying `feature_requests` for user-facing lists must filter `merged_into_id IS NULL`.
    `merge_service.py` locks both rows `FOR UPDATE` ordered by id, deletes duplicate votes before
-   moving the rest, and recomputes counters from the rows — do not add the old counters together.
-6. **`role` is never accepted from a client.** Registration always creates a standard user.
+   moving the rest, re-points earlier duplicates at the new survivor, and recomputes counters
+   from the rows — do not add the old counters together. **`merged_into_id` must always resolve
+   to a live request in one hop.**
+6. **Any write that first checks `is_merged` must hold a row lock across that check** — use
+   `request_service.get_request_for_update`, not `db.get`. Otherwise a merge commits in the gap
+   and the row is stranded on a retired request. Lock exactly one row so it cannot deadlock
+   against the merge's ordered two-row lock.
+7. **User input going into `LIKE`/`ILIKE` must escape `\`, `%` and `_`** and pass `escape="\\"`;
+   see `request_service.list_requests`.
+8. **`role` is never accepted from a client.** Registration always creates a standard user.
 
 ## Test harness specifics
 
@@ -99,6 +107,9 @@ mechanism is removed.
   live in `conftest.py`.
 - **Frontend tests that seed the query cache must set `staleTime: Infinity`** on the test
   `QueryClient`, or a background refetch fires and `fetch` assertions see an unexpected GET.
+- **Never hand-set a cookie on a `TestClient` that has already signed in.** `cookies.set()` adds
+  a second jar entry rather than replacing the login cookie, and which one is sent is undefined.
+  Auth-failure tests use a client that never logged in (see `tests/test_auth.py`).
 
 ## Gotchas
 

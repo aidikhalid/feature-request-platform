@@ -133,6 +133,11 @@ one line to read. It cannot use a normal index and has no relevance ranking, so 
 Postgres full-text search with a GIN index as the next step. Building that now would have
 been optimising a board with twenty rows.
 
+The user's term is escaped before it goes into the pattern (`\`, `%` and `_`, with an
+explicit `ESCAPE`). Otherwise `%` and `_` are wildcards rather than characters: searching
+for `100%` would also match "1000 concurrent users", `sign_in` would match "signxin", and
+a lone `%` would return the entire board.
+
 ---
 
 ## 3. Data model
@@ -233,10 +238,8 @@ at all:
 1. **Lock both rows** with `SELECT ... FOR UPDATE`, **ordered by id**. Deterministic lock
    ordering is what stops two admins merging overlapping pairs (A→B and B→A at the same
    moment) from deadlocking.
-2. **Validate**: not into itself; neither request already merged. Because an
-   already-merged request can be neither source nor target, `merged_into_id` can never
-   form a cycle, and chains stay one level deep. That is a real limitation (§6) accepted
-   in exchange for an invariant that is trivial to verify.
+2. **Validate**: not into itself; neither request already merged. Refusing a merged
+   *target* is what makes a cycle impossible — every arrow must end at a live request.
 3. **Resolve double-voters, then move the rest.** A user may have voted on *both*
    requests. Moving their vote across would violate the unique constraint, and adding the
    two counters together would count one person twice. So the source-side duplicate votes
@@ -245,8 +248,22 @@ at all:
 4. **Move the comments** — no uniqueness rule applies, so they all move.
 5. **Recompute both counters from the underlying rows**, not by adding the old counters,
    which would be wrong after step 3.
-6. **Mark the source** `merged_into_id = target`. It is now hidden from the board,
+6. **Re-point anything already merged into the source.** A survivor can later be merged
+   onward (1→2, then 2→3), and the earlier duplicate has to follow, or it would point at
+   a request that is itself retired and a visitor would land on a second dead end. The
+   invariant is that `merged_into_id` always resolves to a live request **in one hop**,
+   and `test_no_merged_request_ever_points_at_another_merged_request` asserts it over the
+   whole table.
+7. **Mark the source** `merged_into_id = target`. It is now hidden from the board,
    excluded from statistics, and rejects votes, comments and edits with `409`.
+
+**Voting and commenting take the same row lock.** Both check "is this request merged?"
+and then insert, and without a lock held across that gap a merge committing in between
+strands the new row on a retired request — invisible on the board, and impossible for the
+user to withdraw. `request_service.get_request_for_update` takes the lock before the
+check; because it only ever locks one row, it cannot deadlock against the merge's ordered
+two-row lock. `api/tests/test_merge_concurrency.py` races the two operations and asserts
+no vote or comment is ever left behind; it fails against the unlocked version.
 
 ### 4.4 Error handling — `api/app/errors.py`
 
@@ -276,7 +293,7 @@ actually rejected, which means the rules shown to the user are the rules enforce
 | Usage statistics | Five aggregates plus a most-requested list |
 | Migrations | Alembic; the same migrations run in tests |
 | Docker local setup | `docker compose up` from a clean clone, health-checked, seeded |
-| Tests | 48 backend + 16 frontend, organised around the business rules |
+| Tests | 56 backend + 16 frontend, organised around the business rules |
 | API docs | OpenAPI at `/docs`, generated from the validating schemas |
 
 ### Partial — works, with a stated boundary
@@ -288,7 +305,9 @@ actually rejected, which means the rules shown to the user are the rules enforce
 - **Search** is `ILIKE` substring matching — no relevance ranking, no index usage (§2.6).
 - **Statistics** are computed live on each request. Fine at this size; they would need
   caching or a rollup table well before they became slow.
-- **Merge is one level deep** — an already-merged request cannot be merged again (§4.3).
+- **Merging is one-way.** A survivor can be merged onward and earlier duplicates follow
+  it (§4.3), but there is no un-merge: splitting a request back out would need the
+  original ownership of each vote and comment, which is not recorded.
 - **Frontend tests** cover the highest-risk component (the optimistic vote toggle), the
   filter controls, and a shell smoke test that renders the app through its routes to catch
   wiring mistakes. They are not per-page behavioural tests: the backend carries the
@@ -330,9 +349,9 @@ are none.
    future code path that inserts a vote without going through `vote_service` will drift.
    A reconciliation job — or moving the counters into a trigger — removes the class of bug
    entirely.
-4. **`merged_into_id` chains cannot grow past one level** (§4.3). Merging B into C after A
-   was merged into B is refused. Supporting it means resolving to the final target and
-   re-pointing the whole chain.
+4. **A merge cannot be undone** through the API. It moves other people's votes and
+   comments, and the source request keeps no record of which of them were originally its
+   own, so reversing it would need an audit trail that is not built (§7).
 5. **No pagination on comments.** A request with a thousand comments returns all of them
    in one response.
 6. **Statistics are recomputed on every call** and are admin-only, so the cost is bounded
@@ -395,9 +414,11 @@ Services commit explicitly on success; anything unhandled rolls the whole reques
 The interesting boundaries are voting (insert + counter) and merging (six statements, one
 commit).
 
-**Race conditions.** Handled in three places: the unique index on votes, the atomic
-counter increment, and `FOR UPDATE` with deterministic lock ordering in the merge. Each is
-covered by a test that fails when the mechanism is removed.
+**Race conditions.** Handled in four places: the unique index on votes, the atomic
+counter increment, `FOR UPDATE` with deterministic lock ordering in the merge, and the
+same row lock taken by voting and commenting so a write cannot land on a request that is
+being merged away. Each is covered by a test that fails when the mechanism is removed —
+both concurrency suites were checked against the broken versions rather than assumed.
 
 **Caching.** None today, deliberately. The first thing worth caching is the statistics
 endpoint, then the first page of the board for anonymous visitors — both are read-heavy

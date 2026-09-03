@@ -1,5 +1,10 @@
 """Authentication: identity, and the failure paths that matter."""
 
+from datetime import datetime, timedelta, timezone
+
+import jwt
+
+from app.config import settings
 from tests.conftest import sign_in
 
 
@@ -63,7 +68,34 @@ def test_logout_clears_the_session(client, user):
     assert client.get("/api/auth/me").status_code == 401
 
 
-def test_a_tampered_cookie_is_not_trusted(client, user):
-    sign_in(client, "alice@example.com")
-    client.cookies.set("frp_session", "not.a.real.token")
+# The three tests below deliberately use a client that has NOT signed in.
+#
+# Setting a cookie on a jar that already holds a real session adds a second entry (the
+# login cookie is stored against the test host, a hand-set one against no host) rather
+# than replacing it, and which of the two is sent is not defined — so a test written that
+# way passes or fails depending on the httpx version and proves nothing either way.
+
+def test_a_garbage_cookie_is_not_trusted(client):
+    client.cookies.set(settings.cookie_name, "not.a.real.token")
+    assert client.get("/api/auth/me").status_code == 401
+
+
+def test_a_token_signed_with_the_wrong_secret_is_rejected(client, user):
+    """The signature is the whole point: a well-formed token is not a trusted one."""
+    forged = jwt.encode(
+        {"sub": str(user.id), "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
+        "a-different-secret",
+        algorithm=settings.jwt_algorithm,
+    )
+    client.cookies.set(settings.cookie_name, forged)
+    assert client.get("/api/auth/me").status_code == 401
+
+
+def test_an_expired_token_is_rejected(client, user):
+    expired = jwt.encode(
+        {"sub": str(user.id), "exp": datetime.now(timezone.utc) - timedelta(seconds=1)},
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+    client.cookies.set(settings.cookie_name, expired)
     assert client.get("/api/auth/me").status_code == 401

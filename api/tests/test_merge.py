@@ -112,7 +112,7 @@ def test_a_request_cannot_be_merged_into_itself(client, db, admin, feature_reque
 
 
 def test_an_already_merged_request_cannot_be_merged_again(client, db, admin, user):
-    """Keeps merged_into_id a one-level pointer, so it can never form a cycle or a chain."""
+    """Refusing a merged target is what makes a cycle impossible."""
     first = make_request(db, user, title="First idea")
     second = make_request(db, user, title="Second idea")
     third = make_request(db, user, title="Third idea")
@@ -144,3 +144,57 @@ def test_only_admins_may_merge(client, db, user, other_user):
     assert client.post(
         f"/api/admin/requests/{duplicate.id}/merge", json={"target_id": survivor.id}
     ).status_code == 403
+
+
+def test_merging_a_survivor_flattens_the_chain(client, db, admin, user, other_user):
+    """A survivor can later be merged onward, and the earlier duplicate follows it.
+
+    Merging 1 into 2 and then 2 into 3 must not leave 1 pointing at 2, because 2 is now
+    retired and hidden — a visitor following that pointer would land on a second dead end.
+    Every merged request must resolve to a live request in one hop.
+    """
+    first = make_request(db, user, title="Dark theme")
+    second = make_request(db, user, title="Dark mode")
+    third = make_request(db, user, title="Night mode")
+
+    sign_in(client, "alice@example.com")
+    client.post(f"/api/requests/{first.id}/vote")
+    _comment(client, first.id, "From the first request")
+    sign_in(client, "bob@example.com")
+    client.post(f"/api/requests/{second.id}/vote")
+
+    sign_in(client, "admin@example.com")
+    assert client.post(f"/api/admin/requests/{first.id}/merge", json={"target_id": second.id}).status_code == 200
+    final = client.post(f"/api/admin/requests/{second.id}/merge", json={"target_id": third.id})
+    assert final.status_code == 200
+
+    db.expire_all()
+    # Both duplicates point straight at the surviving request, not at each other.
+    assert db.get(FeatureRequest, first.id).merged_into_id == third.id
+    assert db.get(FeatureRequest, second.id).merged_into_id == third.id
+    assert db.get(FeatureRequest, third.id).merged_into_id is None
+
+    # And no activity was lost on the way through.
+    assert final.json()["vote_count"] == 2
+    assert final.json()["comment_count"] == 1
+    assert db.execute(
+        select(func.count()).select_from(Vote).where(Vote.feature_request_id == third.id)
+    ).scalar_one() == 2
+
+
+def test_no_merged_request_ever_points_at_another_merged_request(client, db, admin, user):
+    """The invariant, asserted directly over the whole table after a chain of merges."""
+    requests = [make_request(db, user, title=f"Idea {i}") for i in range(4)]
+    sign_in(client, "admin@example.com")
+    for source, target in zip(requests, requests[1:]):
+        assert client.post(
+            f"/api/admin/requests/{source.id}/merge", json={"target_id": target.id}
+        ).status_code == 200
+
+    db.expire_all()
+    merged = db.execute(
+        select(FeatureRequest).where(FeatureRequest.merged_into_id.is_not(None))
+    ).scalars().all()
+    assert len(merged) == 3
+    for request in merged:
+        assert db.get(FeatureRequest, request.merged_into_id).merged_into_id is None

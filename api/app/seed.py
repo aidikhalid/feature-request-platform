@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import Comment, FeatureRequest, RequestStatus, User, UserRole, Vote
 from app.core.security import hash_password
@@ -133,4 +134,7 @@ def seed() -> None:
 
 
 if __name__ == "__main__":
-    seed()
+    if settings.seed_on_startup:
+        seed()
+    else:
+        print("[seed] SEED_ON_STARTUP is false — skipping.")

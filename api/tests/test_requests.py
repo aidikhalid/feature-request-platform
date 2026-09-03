@@ -111,3 +111,23 @@ def test_commenting_requires_authentication(client, feature_request):
     assert client.post(
         f"/api/requests/{feature_request.id}/comments", json={"body": "Anonymous"}
     ).status_code == 401
+
+
+def test_search_treats_like_wildcards_as_literal_text(client, db, user):
+    """% and _ are LIKE wildcards; a user typing them means them literally."""
+    make_request(db, user, title="Show 100% progress on the bar")
+    make_request(db, user, title="Support 1000 concurrent users")
+    make_request(db, user, title="Fix the sign_in redirect")
+    make_request(db, user, title="Fix the signxin redirect")
+
+    percent = client.get("/api/requests", params={"q": "100%"}).json()
+    assert [i["title"] for i in percent["items"]] == ["Show 100% progress on the bar"]
+
+    underscore = client.get("/api/requests", params={"q": "sign_in"}).json()
+    assert [i["title"] for i in underscore["items"]] == ["Fix the sign_in redirect"]
+
+    # A lone wildcard is a search for that character, not a request for everything.
+    assert client.get("/api/requests", params={"q": "%"}).json()["total"] == 1
+
+    # A trailing backslash must not break the escape sequence either.
+    assert client.get("/api/requests", params={"q": "\\"}).status_code == 200

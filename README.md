@@ -60,7 +60,7 @@ docker compose down -v       # stop and delete the database volume (full reset)
 
 ## 2. Running the tests
 
-**Backend — 48 tests, against a real PostgreSQL database:**
+**Backend — 56 tests, against a real PostgreSQL database:**
 
 ```bash
 docker compose exec api pytest -v
@@ -93,11 +93,13 @@ The assignment's six business rules were used directly as the test checklist:
 | Only administrators may change status | `api/tests/test_authorization.py` |
 | A user cannot edit another user's request | `api/tests/test_authorization.py` |
 | Merging must preserve votes and comments | `api/tests/test_merge.py` |
+| A write must not land on a request being merged away | `api/tests/test_merge_concurrency.py` |
 
-The concurrency tests use real threads and real separate database connections. They were
-checked against a deliberately broken implementation (a read-modify-write counter instead
-of an atomic SQL increment): it records **2 votes out of 25**, so the test genuinely
-fails when the code is wrong.
+The concurrency tests use real threads and real separate database connections, and both
+were checked against deliberately broken implementations rather than assumed to work. With
+a read-modify-write counter instead of an atomic SQL increment, 25 concurrent votes record
+**2**. With the row lock removed from voting and commenting, a write raced against a merge
+is left stranded on the retired request.
 
 ---
 

@@ -31,9 +31,17 @@ def list_requests(
     if q:
         # ILIKE is honest for this dataset size. Postgres full-text search with a GIN
         # index is the documented next step once the board outgrows it.
-        pattern = f"%{q.strip()}%"
+        #
+        # The user's term is escaped first: % and _ are LIKE wildcards, so without this a
+        # search for "100%" would also match "1000 concurrent users", "sign_in" would
+        # match "signxin", and a lone "%" would return the entire board.
+        term = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{term}%"
         query = query.where(
-            or_(FeatureRequest.title.ilike(pattern), FeatureRequest.description.ilike(pattern))
+            or_(
+                FeatureRequest.title.ilike(pattern, escape="\\"),
+                FeatureRequest.description.ilike(pattern, escape="\\"),
+            )
         )
 
     if status is not None:
@@ -58,6 +66,26 @@ def list_requests(
         .all()
     )
     return list(rows), total
+
+
+def get_request_for_update(db: Session, request_id: int) -> FeatureRequest:
+    """Load a request and hold a row lock on it for the rest of the transaction.
+
+    Voting and commenting take this lock before they check whether the request has been
+    merged. Without it there is a gap between "is this request still open?" and the
+    insert, and a merge committing inside that gap strands the new row on a request that
+    is now retired — hidden from the board, and impossible for the user to withdraw.
+
+    `merge_service` locks the same rows first, so one of the two operations waits for the
+    other rather than interleaving. Only ever one row is locked here, so this cannot
+    deadlock against the merge's ordered two-row lock.
+    """
+    request = db.execute(
+        select(FeatureRequest).where(FeatureRequest.id == request_id).with_for_update()
+    ).scalar_one_or_none()
+    if request is None:
+        raise NotFound("Feature request not found")
+    return request
 
 
 def get_request(db: Session, request_id: int) -> FeatureRequest:
@@ -128,9 +156,8 @@ def list_comments(db: Session, request_id: int) -> list[Comment]:
 
 
 def add_comment(db: Session, request_id: int, author: User, body: str) -> Comment:
-    request = db.get(FeatureRequest, request_id)
-    if request is None:
-        raise NotFound("Feature request not found")
+    # Locked before the merged check — see get_request_for_update.
+    request = get_request_for_update(db, request_id)
     if request.is_merged:
         raise Conflict("This request was merged; comment on the surviving request instead",
                        code="request_merged")

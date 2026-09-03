@@ -179,8 +179,15 @@ export function useToggleVote(request: { id: number; has_voted: boolean; vote_co
         : api.delete<VoteState>(`/api/requests/${request.id}/vote`),
 
     onMutate: async (nextVoted) => {
-      // Stop any in-flight refetch from overwriting the optimistic value.
-      await client.cancelQueries({ queryKey: keys.request(request.id) });
+      // Stop any in-flight refetch from overwriting the optimistic value. Both caches
+      // have to be cancelled, not just the detail one: the optimistic write below
+      // touches every ['requests'] list too, and a board refetch already in flight would
+      // otherwise land afterwards and visibly revert the button until the mutation
+      // resolves.
+      await Promise.all([
+        client.cancelQueries({ queryKey: keys.request(request.id) }),
+        client.cancelQueries({ queryKey: ['requests'] }),
+      ]);
 
       const rollback = {
         detail: client.getQueryData<FeatureRequestDetail>(keys.request(request.id)),

@@ -10,15 +10,16 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.errors import Conflict, NotFound
+from app.errors import Conflict
 from app.models import FeatureRequest, Vote
 from app.schemas import VoteState
+from app.services.request_service import get_request_for_update
 
 
 def _load_votable_request(db: Session, request_id: int) -> FeatureRequest:
-    request = db.get(FeatureRequest, request_id)
-    if request is None:
-        raise NotFound("Feature request not found")
+    # The row lock is taken before the merged check, so a merge cannot commit between the
+    # two and strand this vote on a retired request. See request_service.get_request_for_update.
+    request = get_request_for_update(db, request_id)
     if request.is_merged:
         # A merged request is an archive pointer; votes belong on the surviving request.
         raise Conflict(
