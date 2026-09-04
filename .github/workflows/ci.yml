@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Neither job writes to the repository. Declared here rather than relying on the
+# repository default, which can be changed without touching this file.
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend — pytest against real Postgres
