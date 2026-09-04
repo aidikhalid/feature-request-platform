@@ -46,8 +46,8 @@ will fill the form for you).
 |---|---|---|
 | `admin@example.com` | administrator | status changes, official responses, merging, statistics |
 | `pm@example.com` | administrator | a second admin |
-| `alice@example.com` | standard user | voting, commenting, submitting, editing own request |
-| `bob@example.com` | standard user | testing that one user cannot edit another's request |
+| `shinji@example.com` | standard user | voting, commenting, submitting, editing own request |
+| `rei@example.com` | standard user | testing that one user cannot edit another's request |
 
 ### Stopping and resetting
 
@@ -119,11 +119,11 @@ list.
 
 ### A tour worth taking
 
-1. Sign in as `alice@example.com` and vote on a request. **Click the vote button rapidly
-   several times** — the count never goes above one. The endpoint is idempotent.
-2. Sign out and try to vote → you are sent to sign-in. Sign in as `bob@example.com` and
-   open a request Alice wrote → no Edit control, and the API returns 403 if you call it
-   directly.
+1. Sign in as `shinji@example.com` and vote on a request. **Click the vote button
+   rapidly several times** — the count never goes above one. The endpoint is idempotent.
+2. Sign out and try to vote → you are sent to sign-in. Sign in as `rei@example.com` and
+   open a request written by someone else → no Edit control, and the API returns 403 if
+   you call it directly.
 3. Sign in as `admin@example.com`, open a request, set its status and publish an official
    response.
 4. Still as admin, pick two similar requests. Vote on **both** as the same user first,
@@ -180,7 +180,7 @@ Full interactive documentation at http://localhost:8000/docs.
 | `POST` | `/api/auth/login` | — | Sign in; sets the session cookie |
 | `POST` | `/api/auth/logout` | — | Clear the session cookie |
 | `GET` | `/api/auth/me` | user | Current user |
-| `GET` | `/api/requests` | optional | Browse: `q`, `status`, `sort`, `page`, `page_size` |
+| `GET` | `/api/requests` | optional | Browse: `q`, `status`, `sort` (`top`, `new`, `discussed`), `page`, `page_size` |
 | `POST` | `/api/requests` | user | Submit a request |
 | `GET` | `/api/requests/{id}` | optional | Request detail |
 | `PATCH` | `/api/requests/{id}` | owner or admin | Edit title/description |

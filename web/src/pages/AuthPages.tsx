@@ -7,7 +7,7 @@ import { InlineError } from '../components/Feedback';
 
 const DEMO_ACCOUNTS = [
   { email: 'admin@example.com', label: 'Administrator' },
-  { email: 'alice@example.com', label: 'Standard user' },
+  { email: 'shinji@example.com', label: 'Standard user' },
 ];
 
 export function LoginPage() {

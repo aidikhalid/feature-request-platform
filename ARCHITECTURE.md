@@ -300,8 +300,16 @@ actually rejected, which means the rules shown to the user are the rules enforce
 
 - **Editing a request** covers title and description only, and is owner-or-admin. There
   is no edit history and no "edited" marker.
+- **"Review submitted requests"** is served by the board, not by a dedicated moderation
+  queue: an administrator filters to *Under Review* and acts on each one from its detail
+  page. That satisfies the requirement with screens that already exist, and it is an
+  interpretation rather than an omission — a purpose-built queue with bulk actions and an
+  assignee is what growing triage volume would justify.
 - **Pagination** is offset-based. Correct and adequate here; it drifts if rows are
   inserted while a user pages, and deep offsets get slow. Cursor pagination is the fix.
+- **Comments are returned in full.** `GET /api/requests/{id}/comments` takes no page or
+  limit parameter, so a request with a thousand comments returns a thousand (§6.5). Honest
+  at seed scale; the fix is the same cursor pagination the board wants.
 - **Search** is `ILIKE` substring matching — no relevance ranking, no index usage (§2.6).
 - **Statistics** are computed live on each request. Fine at this size; they would need
   caching or a rollup table well before they became slow.
@@ -328,6 +336,8 @@ Each of these was a conscious trade against the timebox, not an oversight:
 | Full-text search with ranking | §2.6 |
 | Cursor pagination | Offset is correct at this size |
 | Tags / categories, attachments, rich text | Product scope, not architectural depth |
+| Deleting a request; editing or deleting a comment | Needs a moderation policy before it needs code: soft delete or hard, who may remove another person's words, and what happens to the denormalised counters. Not an afternoon's work, and the wrong thing to guess at |
+| A "my requests" or profile view | The board filters on `q`, `status` and `sort` only — there is no author filter, so a user finds their own submissions by searching for them. A `?author=me` filter is small; a profile page is product scope |
 | End-to-end (Playwright) tests | The business rules are better tested at the API level; one E2E happy path is the next increment |
 | CI pipeline, metrics, tracing | §7 |
 | Following a request / notification preferences | "Follow progress" is served by the status model and the board |
