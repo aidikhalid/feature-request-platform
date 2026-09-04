@@ -12,7 +12,7 @@ Two consequences for any work here:
 
 - **Do not add deferred features.** `ARCHITECTURE.md` §5 lists what was intentionally left out
   (real-time, caching layer, notifications, audit log, rate limiting, full-text search, cursor
-  pagination, E2E tests, CI). Adding one contradicts a graded, written trade-off.
+  pagination, E2E tests). Adding one contradicts a graded, written trade-off.
 - **`README.md` and `ARCHITECTURE.md` are graded deliverables.** If a change alters behaviour,
   a documented command, a test count, or a stated trade-off, update them in the same change.
 
@@ -37,6 +37,7 @@ docker compose logs -f api                          # tail a service
 | Production build | `docker compose exec web npm run build` |
 | psql | `docker compose exec db psql -U frp -d frp` |
 | New migration | `docker compose exec api alembic revision --autogenerate -m "message"` |
+| CI | `.github/workflows/ci.yml` runs the tests, typecheck and build rows above on every push and PR |
 
 There is no linter or formatter configured. Match the surrounding style.
 

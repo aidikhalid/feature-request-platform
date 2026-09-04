@@ -1,5 +1,7 @@
 # Feature Request & Voting Platform
 
+[![CI](https://github.com/aidikhalid/feature-request-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/aidikhalid/feature-request-platform/actions/workflows/ci.yml)
+
 A product-feedback board: users submit feature requests, vote, comment and follow
 progress; administrators triage status, publish official responses, merge duplicates and
 review usage statistics.
@@ -100,6 +102,21 @@ were checked against deliberately broken implementations rather than assumed to 
 a read-modify-write counter instead of an atomic SQL increment, 25 concurrent votes record
 **2**. With the row lock removed from voting and commenting, a write raced against a merge
 is left stranded on the retired request.
+
+### Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull request
+against `main`, in two parallel jobs:
+
+| Job | What it runs |
+|---|---|
+| Backend | `pytest` against a `postgres:16-alpine` service container — the same engine as development, because the guarantees under test are a unique index and row-level locking |
+| Frontend | `vitest`, then `tsc --noEmit`, then the production build |
+
+The backend job installs no database of its own: `tests/conftest.py` takes `DATABASE_URL`
+from the environment, creates `frp_test` beside it and migrates it with the same Alembic
+revisions a deployment runs. Typechecking is a separate step from the build because
+`npm run build` uses `tsc -b`, which is incremental and can skip it.
 
 ---
 

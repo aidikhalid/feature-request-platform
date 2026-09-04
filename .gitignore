@@ -22,3 +22,6 @@ dist/
 
 # Personal interview prep — not part of the submission
 interview-prep/
+
+# TypeScript incremental build cache — machine-local, never committed
+web/tsconfig.tsbuildinfo

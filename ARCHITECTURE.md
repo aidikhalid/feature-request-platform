@@ -295,6 +295,7 @@ actually rejected, which means the rules shown to the user are the rules enforce
 | Docker local setup | `docker compose up` from a clean clone, health-checked, seeded |
 | Tests | 56 backend + 16 frontend, organised around the business rules |
 | API docs | OpenAPI at `/docs`, generated from the validating schemas |
+| CI | GitHub Actions on every push and pull request: pytest against Postgres 16, vitest, typecheck, production build |
 
 ### Partial — works, with a stated boundary
 
@@ -339,7 +340,7 @@ Each of these was a conscious trade against the timebox, not an oversight:
 | Deleting a request; editing or deleting a comment | Needs a moderation policy before it needs code: soft delete or hard, who may remove another person's words, and what happens to the denormalised counters. Not an afternoon's work, and the wrong thing to guess at |
 | A "my requests" or profile view | The board filters on `q`, `status` and `sort` only — there is no author filter, so a user finds their own submissions by searching for them. A `?author=me` filter is small; a profile page is product scope |
 | End-to-end (Playwright) tests | The business rules are better tested at the API level; one E2E happy path is the next increment |
-| CI pipeline, metrics, tracing | §7 |
+| Metrics and tracing | §7 |
 | Following a request / notification preferences | "Follow progress" is served by the status model and the board |
 
 ---
@@ -385,28 +386,25 @@ Ordered by what would actually be done first.
 1. **Server-side sessions** — a `sessions` table keyed by an opaque token, so sessions
    can be revoked and "sign out everywhere" works. Removes risk 1, and lets §6.2's CSRF
    token hang off the same record.
-2. **CI pipeline** — run `pytest`, `vitest`, `tsc --noEmit` and a lint pass on every
-   pull request against a Postgres service container. Cheap, and it is what keeps
-   everything else in this list honest.
-3. **Structured logging with a request id**, then metrics (request rate, latency, error
+2. **Structured logging with a request id**, then metrics (request rate, latency, error
    rate by endpoint) and tracing around the database. Being able to answer "what happened
    to this request?" precedes every performance decision.
-4. **Audit log** — an append-only table recording who changed a status, published a
+3. **Audit log** — an append-only table recording who changed a status, published a
    response or merged a request, and when. The brief lists it as optional; in a product
    where administrators act on other people's contributions it is close to mandatory.
-5. **Rate limiting at the edge** on authentication and write endpoints, plus a login
+4. **Rate limiting at the edge** on authentication and write endpoints, plus a login
    attempt counter. Closes risk 8.
-6. **Postgres full-text search** — a generated `tsvector` column with a GIN index,
+5. **Postgres full-text search** — a generated `tsvector` column with a GIN index,
    `websearch_to_tsquery`, and `ts_rank` for ordering. Replaces §2.6 when the board grows.
-7. **Cursor pagination** for the board and comments.
-8. **Counter reconciliation** — a periodic job asserting `vote_count` equals the row
+6. **Cursor pagination** for the board and comments.
+7. **Counter reconciliation** — a periodic job asserting `vote_count` equals the row
    count, alerting on drift. Cheap insurance for the §2.5 trade-off.
-9. **Deployment** — build the web app to static files behind a CDN, run the API as a
+8. **Deployment** — build the web app to static files behind a CDN, run the API as a
    container behind a load balancer with `alembic upgrade head` as a release step (not on
    container start, so concurrent replicas cannot race), and Postgres as a managed
    instance with backups and a read replica when reporting justifies one.
-10. **One end-to-end happy path** in Playwright — sign in, submit, vote, comment, admin
-    changes status — as a smoke test against a real deployment.
+9. **One end-to-end happy path** in Playwright — sign in, submit, vote, comment, admin
+   changes status — as a smoke test against a real deployment.
 
 ---
 
