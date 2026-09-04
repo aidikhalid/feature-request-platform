@@ -19,3 +19,6 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Personal interview prep — not part of the submission
+interview-prep/

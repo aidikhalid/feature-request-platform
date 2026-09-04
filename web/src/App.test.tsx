@@ -21,7 +21,7 @@ const REQUEST: FeatureRequestSummary = {
   vote_count: 12,
   comment_count: 3,
   created_at: new Date().toISOString(),
-  author: { id: 5, display_name: 'Alice Tan' },
+  author: { id: 5, display_name: 'Shinji Ikari' },
   merged_into_id: null,
   has_voted: false,
 };
@@ -37,7 +37,7 @@ const BOARD: Page<FeatureRequestSummary> = {
 const ADMIN: User = {
   id: 1,
   email: 'admin@example.com',
-  display_name: 'Ava Admin',
+  display_name: 'Gendo Admin',
   role: 'admin',
   created_at: new Date().toISOString(),
 };
@@ -106,7 +106,7 @@ describe('App', () => {
 
     renderApp();
 
-    expect(await screen.findByText(/Ava Admin/)).toBeInTheDocument();
+    expect(await screen.findByText(/Gendo Admin/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Statistics' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
   });
@@ -136,7 +136,7 @@ describe('App', () => {
   });
 
   it('keeps the statistics page closed to standard users', async () => {
-    stubApi({ '/api/auth/me': () => json({ ...ADMIN, role: 'user', display_name: 'Alice Tan' }) });
+    stubApi({ '/api/auth/me': () => json({ ...ADMIN, role: 'user', display_name: 'Shinji Ikari' }) });
 
     renderApp('/admin');
 

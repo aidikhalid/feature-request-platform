@@ -17,12 +17,12 @@ from app.core.security import hash_password
 DEMO_PASSWORD = "Password123!"
 
 USERS = [
-    ("admin@example.com", "Ava Admin", UserRole.ADMIN),
-    ("pm@example.com", "Priya Product", UserRole.ADMIN),
-    ("alice@example.com", "Alice Tan", UserRole.USER),
-    ("bob@example.com", "Bob Lim", UserRole.USER),
-    ("carol@example.com", "Carol Wong", UserRole.USER),
-    ("dan@example.com", "Dan Rahman", UserRole.USER),
+    ("admin@example.com", "Gendo Admin", UserRole.ADMIN),
+    ("pm@example.com", "Misato Product", UserRole.ADMIN),
+    ("shinji@example.com", "Shinji Ikari", UserRole.USER),
+    ("rei@example.com", "Rei Ayanami", UserRole.USER),
+    ("asuka@example.com", "Asuka Langley", UserRole.USER),
+    ("mari@example.com", "Mari Makinami", UserRole.USER),
 ]
 
 REQUESTS = [
@@ -128,7 +128,7 @@ def seed() -> None:
 
         db.commit()
         print(f"[seed] Created {len(users)} users and {len(requests)} feature requests.")
-        print(f"[seed] Sign in as admin@example.com or alice@example.com — password: {DEMO_PASSWORD}")
+        print(f"[seed] Sign in as admin@example.com or shinji@example.com — password: {DEMO_PASSWORD}")
     finally:
         db.close()
 
